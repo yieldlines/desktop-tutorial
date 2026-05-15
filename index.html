@@ -3,244 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Structural FEM Pro - 2D Frame Analysis</title>
+    <title>Structural FEM Pro - Multi-Load Analysis</title>
     <style>
         :root {
             --bg-main: #1e1e24; --bg-panel: #2b2b36; --accent: #00a8ff;
             --text-main: #f5f6fa; --text-muted: #7f8fa6; --border: #40404f;
-            --danger: #e84118; --success: #4cd137;
+            --danger: #e84118; --success: #4cd137; --warning: #f1c40f;
         }
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { margin: 0; display: flex; height: 100vh; background-color: var(--bg-main); color: var(--text-main); overflow: hidden; }
         
-        .sidebar { width: 320px; background: var(--bg-panel); display: flex; flex-direction: column; border-right: 1px solid var(--border); z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
-        .sidebar-header { padding: 20px; background: #23232c; border-bottom: 1px solid var(--border); text-align: center; font-weight: bold; font-size: 1.2rem; letter-spacing: 1px; }
-        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .sidebar { width: 320px; background: var(--bg-panel); display: flex; flex-direction: column; border-right: 1px solid var(--border); z-index: 10; }
+        .sidebar-header { padding: 20px; background: #23232c; border-bottom: 1px solid var(--border); font-weight: bold; text-align: center; }
+        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; }
         
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
-        input[type="number"], select { padding: 10px; background: var(--bg-main); border: 1px solid var(--border); color: white; border-radius: 6px; outline: none; transition: 0.2s; }
+        .input-group { display: flex; flex-direction: column; gap: 4px; }
+        label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+        input, select { padding: 8px; background: var(--bg-main); border: 1px solid var(--border); color: white; border-radius: 4px; }
         
-        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        button { padding: 12px 15px; cursor: pointer; border: none; border-radius: 6px; background: #353b48; color: white; font-weight: bold; transition: all 0.2s ease; }
-        button:hover { background: #4b5363; }
-        button.active { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(0, 168, 255, 0.4); }
-        .btn-danger { background: rgba(232, 65, 24, 0.2); border: 1px solid var(--danger); color: #ff7675; }
-        .btn-danger.active { background: var(--danger); color: white; border-color: var(--danger); }
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        button { padding: 10px; cursor: pointer; border: none; border-radius: 4px; background: #353b48; color: white; font-weight: bold; font-size: 0.85rem; }
+        button.active { background: var(--accent); }
+        .btn-danger { background: rgba(232, 65, 24, 0.1); color: #ff7675; border: 1px solid var(--danger); }
+        .btn-danger.active { background: var(--danger); color: white; }
         
-        .status-card { padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 4px solid var(--danger); font-size: 0.9rem; margin-top: auto; }
-        .status-card.stable { border-left-color: var(--success); }
-        
-        .workspace { flex: 1; display: flex; flex-direction: column; position: relative; }
-        .canvas-container { flex: 1; position: relative; cursor: crosshair; }
+        .workspace { flex: 1; display: flex; flex-direction: column; }
+        .canvas-container { flex: 1; position: relative; background: #18181d; }
         canvas { display: block; width: 100%; height: 100%; }
         
-        .diagrams-panel { height: 320px; background: var(--bg-panel); border-top: 2px solid var(--border); display: flex; flex-direction: column; }
+        .diagrams-panel { height: 350px; background: var(--bg-panel); border-top: 2px solid var(--border); display: flex; flex-direction: column; }
         .scrubber-bar { padding: 10px 20px; background: #23232c; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px; }
-        .scrubber-bar input[type="range"] { flex: 1; cursor: pointer; }
-        .scrubber-val { font-family: monospace; font-size: 1.1rem; color: var(--accent); font-weight: bold; min-width: 150px; }
+        .scrubber-val { font-family: monospace; color: var(--accent); min-width: 250px; font-weight: bold; }
         
         .diag-row { flex: 1; display: flex; }
-        .diag-view { flex: 1; border-right: 1px solid var(--border); position: relative; display: flex; flex-direction: column; }
-        .diag-view:last-child { border-right: none; }
-        .diag-header { padding: 8px; background: rgba(0,0,0,0.2); font-size: 0.8rem; font-weight: bold; color: var(--text-muted); text-align: center; }
-        .diag-canvas { flex: 1; width: 100%; }
+        .diag-view { flex: 1; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .diag-header { padding: 6px; background: rgba(0,0,0,0.3); font-size: 0.7rem; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="sidebar">
-    <div class="sidebar-header">STRUCTURAL PRO v3.0</div>
+    <div class="sidebar-header">STRUCTURAL ANALYZER</div>
     <div class="sidebar-content">
-        <div class="input-group">
-            <label>Member Section (E, I)</label>
-            <div style="display:flex; gap:5px;">
-                <input type="number" id="prop-e" placeholder="E (GPa)" value="200">
-                <input type="number" id="prop-i" placeholder="I (10⁶ mm⁴)" value="100">
-            </div>
+        <div class="input-group"><label>Load Values</label>
+            <input type="number" id="val-p" value="-50" title="Point Load (kN)">
+            <input type="number" id="val-m" value="25" title="Moment (kNm)">
+            <input type="number" id="val-w" value="-10" title="UDL (kN/m)">
         </div>
-        <div class="input-group"><label>Load (kN)</label><input type="number" id="prop-load" value="-50"></div>
-        <div class="input-group">
-            <label>Support Type</label>
-            <select id="prop-support">
-                <option value="fixed">Fixed</option>
-                <option value="pinned">Pinned</option>
-                <option value="roller">Roller</option>
-            </select>
-        </div>
-        <hr style="border: 0; border-top: 1px solid var(--border); width: 100%; margin: 5px 0;">
+        <hr style="border-color: var(--border)">
         <label>Drawing Tools</label>
         <div class="tool-grid">
-            <button id="btn-member" class="active" onclick="setMode('member')">✏️ Member</button>
-            <button id="btn-support" onclick="setMode('support')">◮ Support</button>
-            <button id="btn-load" onclick="setMode('load')">↓ Point Load</button>
-            <button id="btn-delete" class="btn-danger" onclick="setMode('delete')">✖ Eraser</button>
+            <button id="btn-member" class="active" onclick="setMode('member')">Beam</button>
+            <button id="btn-support" onclick="setMode('support')">Support</button>
+            <button id="btn-load" onclick="setMode('load')">↓ Point</button>
+            <button id="btn-moment" onclick="setMode('moment')">↺ Moment</button>
+            <button id="btn-udl" onclick="setMode('udl')">▤ UDL</button>
+            <button id="btn-delete" class="btn-danger" onclick="setMode('delete')">Eraser</button>
         </div>
-        <button class="btn-danger" style="margin-top: 10px;" onclick="clearAll()">Clear Project</button>
-        <div id="status-card" class="status-card">
-            <b id="status-title" style="color: var(--danger)">Status: Unstable</b>
-            <div id="status-desc" style="color: var(--text-muted); margin-top: 5px; font-size: 0.8rem;">Add members and supports.</div>
-        </div>
+        <button class="btn-danger" style="margin-top:10px" onclick="clearAll()">Clear All</button>
     </div>
 </div>
 
 <div class="workspace">
     <div class="canvas-container" id="canvas-container"><canvas id="mainCanvas"></canvas></div>
-    
     <div class="diagrams-panel">
         <div class="scrubber-bar">
-            <label style="color:white; margin:0;">Examine Position (x):</label>
-            <input type="range" id="x-scrubber" min="0" max="100" value="50" oninput="updateScrubber()" disabled>
-            <div class="scrubber-val" id="scrubber-display">x = 0.00 m</div>
+            <input type="range" id="x-scrubber" min="0" max="100" value="50" oninput="solveAndRender()" style="flex:1">
+            <div class="scrubber-val" id="scrubber-display">x = 0.00m</div>
         </div>
         <div class="diag-row">
-            <div class="diag-view"><div class="diag-header">SHEAR (V)</div><canvas id="shearCanvas" class="diag-canvas"></canvas></div>
-            <div class="diag-view"><div class="diag-header">MOMENT (M)</div><canvas id="momentCanvas" class="diag-canvas"></canvas></div>
-            <div class="diag-view"><div class="diag-header">DEFLECTION (δ)</div><canvas id="deflectionCanvas" class="diag-canvas"></canvas></div>
+            <div class="diag-view"><div class="diag-header">SHEAR (V)</div><canvas id="shearCanvas"></canvas></div>
+            <div class="diag-view"><div class="diag-header">MOMENT (M)</div><canvas id="momentCanvas"></canvas></div>
         </div>
     </div>
 </div>
 
 <script>
     const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d');
-    let state = { mode: 'member', isDragging: false, startX: 0, startY: 0, members: [], supports: [], loads: [], stable: false };
-    const gridSpacing = 40;
+    let state = { mode: 'member', isDragging: false, startX: 0, startY: 0, members: [], supports: [], loads: [] };
+    const grid = 40;
 
-    function resizeCanvas() {
-        canvas.width = document.getElementById('canvas-container').clientWidth;
-        canvas.height = document.getElementById('canvas-container').clientHeight;
-        document.querySelectorAll('.diag-canvas').forEach(c => { c.width = c.parentElement.clientWidth; c.height = c.parentElement.clientHeight - 30; });
-        render(); if(state.stable) runSolver();
-    }
-    window.addEventListener('resize', resizeCanvas); setTimeout(resizeCanvas, 50);
+    function setMode(m) { state.mode = m; document.querySelectorAll('.tool-grid button').forEach(b => b.classList.remove('active')); document.getElementById('btn-'+m).classList.add('active'); }
+    const snap = v => Math.round(v/grid)*grid;
 
-    function setMode(m) { state.mode = m; document.querySelectorAll('.tool-grid button').forEach(b => b.classList.remove('active')); document.getElementById('btn-' + m).classList.add('active'); }
-    const snap = (v) => Math.round(v / gridSpacing) * gridSpacing;
-
-    canvas.addEventListener('mousedown', (e) => {
-        const r = canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, snX = snap(mx), snY = snap(my);
+    canvas.addEventListener('mousedown', e => {
+        const r = canvas.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top, sx = snap(mx), sy = snap(my);
         if (state.mode === 'delete') {
-            state.members = state.members.filter(m => Math.hypot((m.x1+m.x2)/2 - mx, (m.y1+m.y2)/2 - my) > 25);
-            state.supports = state.supports.filter(s => Math.hypot(s.x - mx, s.y - my) > 25);
-            state.loads = state.loads.filter(l => Math.hypot(l.x - mx, l.y - my) > 25);
-        } else if (state.mode === 'support') state.supports.push({ x: snX, y: snY, type: document.getElementById('prop-support').value });
-        else if (state.mode === 'load') state.loads.push({ x: snX, y: snY, mag: parseFloat(document.getElementById('prop-load').value) });
-        else if (state.mode === 'member') { state.startX = snX; state.startY = snY; state.isDragging = true; }
-        evaluateStability(); render();
+            state.members = state.members.filter(m => Math.hypot((m.x1+m.x2)/2-mx, (m.y1+m.y2)/2-my) > 20);
+            state.loads = state.loads.filter(l => Math.hypot(l.x-mx, l.y-my) > 20);
+            state.supports = state.supports.filter(s => Math.hypot(s.x-mx, s.y-my) > 20);
+        } else if (state.mode === 'member') { state.startX = sx; state.startY = sy; state.isDragging = true; }
+        else if (state.mode === 'support') state.supports.push({x: sx, y: sy, type: 'pinned'});
+        else if (state.mode === 'load') state.loads.push({x: sx, y: sy, type: 'p', mag: parseFloat(document.getElementById('val-p').value)});
+        else if (state.mode === 'moment') state.loads.push({x: sx, y: sy, type: 'm', mag: parseFloat(document.getElementById('val-m').value)});
+        else if (state.mode === 'udl') state.loads.push({x: sx, y: sy, type: 'w', mag: parseFloat(document.getElementById('val-w').value)});
+        solveAndRender();
     });
 
-    canvas.addEventListener('mousemove', (e) => {
-        if (!state.isDragging || state.mode !== 'member') return;
-        const r = canvas.getBoundingClientRect(), snX = snap(e.clientX - r.left), snY = snap(e.clientY - r.top);
-        render(); ctx.strokeStyle = 'rgba(0, 168, 255, 0.5)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(state.startX, state.startY); ctx.lineTo(snX, snY); ctx.stroke();
+    canvas.addEventListener('mousemove', e => {
+        if (!state.isDragging) return;
+        const r = canvas.getBoundingClientRect(), sx = snap(e.clientX-r.left), sy = snap(e.clientY-r.top);
+        solveAndRender(); ctx.strokeStyle = 'rgba(0,168,255,0.4)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(state.startX, state.startY); ctx.lineTo(sx, sy); ctx.stroke();
     });
 
-    canvas.addEventListener('mouseup', (e) => {
-        if (state.mode === 'member' && state.isDragging) {
-            const r = canvas.getBoundingClientRect(), snX = snap(e.clientX - r.left), snY = snap(e.clientY - r.top);
-            if (state.startX !== snX || state.startY !== snY) state.members.push({ x1: state.startX, y1: state.startY, x2: snX, y2: snY, E: 200, I: 100 });
+    canvas.addEventListener('mouseup', e => {
+        if (state.isDragging) {
+            const r = canvas.getBoundingClientRect(), sx = snap(e.clientX-r.left), sy = snap(e.clientY-r.top);
+            if (sx !== state.startX) state.members.push({x1: state.startX, y1: state.startY, x2: sx, y2: sy});
         }
-        state.isDragging = false; evaluateStability(); render();
+        state.isDragging = false; solveAndRender();
     });
 
-    function evaluateStability() {
-        let r = 0; state.supports.forEach(s => { if (s.type === 'fixed') r += 3; else if (s.type === 'pinned') r += 2; else r += 1; });
-        const sc = document.getElementById('status-card'), t = document.getElementById('status-title'), d = document.getElementById('status-desc');
-        if (state.members.length === 0 || r < 3) {
-            state.stable = false; t.innerText = "Status: Unstable"; t.style.color = "var(--danger)"; d.innerText = "Add members and sufficient supports (r >= 3).";
-            sc.className = "status-card"; document.getElementById('x-scrubber').disabled = true; clearDiagrams();
-        } else {
-            state.stable = true; t.innerText = "Status: Solved"; t.style.color = "var(--success)"; d.innerText = "Equations solved. Adjust slider to view internal forces.";
-            sc.className = "status-card stable"; document.getElementById('x-scrubber').disabled = false; runSolver();
+    function solveAndRender() {
+        renderMain();
+        if (state.members.length > 0 && state.supports.length >= 2) {
+            const m = state.members[0];
+            const L = Math.abs(m.x2 - m.x1) / grid;
+            
+            // Calculate Reactions
+            let sumM_A = 0, sumF = 0;
+            state.loads.forEach(l => {
+                let dist = (l.x - m.x1) / grid;
+                if (l.type === 'p') { sumM_A += l.mag * dist; sumF += l.mag; }
+                if (l.type === 'm') { sumM_A += l.mag; }
+                if (l.type === 'w') { sumM_A += l.mag * L * (L/2); sumF += l.mag * L; }
+            });
+            const Rb = sumM_A / L;
+            const Ra = sumF - Rb;
+
+            const getValues = (x) => {
+                let V = -Ra, M = -Ra * x;
+                state.loads.forEach(l => {
+                    let a = (l.x - m.x1) / grid;
+                    if (x >= a) {
+                        if (l.type === 'p') { V += l.mag; M += l.mag * (x-a); }
+                        if (l.type === 'm') { M += l.mag; }
+                    }
+                    if (l.type === 'w') {
+                        let loadX = Math.min(x, L);
+                        V += l.mag * loadX;
+                        M += l.mag * loadX * (x - loadX/2);
+                    }
+                });
+                return { V: -V, M: -M }; // Sign convention: Upwards/Clockwise
+            };
+
+            const scrubX = (document.getElementById('x-scrubber').value / 100) * L;
+            const current = getValues(scrubX);
+            document.getElementById('scrubber-display').innerText = `x=${scrubX.toFixed(2)}m | V=${current.V.toFixed(1)}kN | M=${current.M.toFixed(1)}kNm`;
+
+            drawDiagram('shearCanvas', L, x => getValues(x).V, '#00a8ff', 1);
+            drawDiagram('momentCanvas', L, x => getValues(x).M, '#e84118', 0.5);
         }
     }
 
-    function render() {
+    function drawDiagram(id, L, fn, color, scale) {
+        const c = document.getElementById(id), g = c.getContext('2d');
+        c.width = c.parentElement.clientWidth; c.height = c.parentElement.clientHeight - 25;
+        g.clearRect(0,0,c.width,c.height);
+        const midY = c.height/2, pad = 30, w = c.width - pad*2;
+
+        // Baseline
+        g.strokeStyle = '#40404f'; g.beginPath(); g.moveTo(pad, midY); g.lineTo(c.width-pad, midY); g.stroke();
+
+        // Results Line (The Curve)
+        g.strokeStyle = color; g.lineWidth = 2; g.beginPath();
+        for(let i=0; i<=100; i++) {
+            let px = pad + (i/100)*w;
+            let val = fn((i/100)*L);
+            let py = midY - (val * scale * 2);
+            if(i===0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.stroke();
+
+        // Scrubber Indicator
+        const sx = pad + (document.getElementById('x-scrubber').value/100)*w;
+        g.setLineDash([4,4]); g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx, c.height); g.stroke(); g.setLineDash([]);
+    }
+
+    function renderMain() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#2b2b36'; ctx.lineWidth = 1;
-        for(let i=0; i<canvas.width; i+=gridSpacing){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-        for(let i=0; i<canvas.height; i+=gridSpacing){ ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+        for(let i=0; i<canvas.width; i+=grid) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+        for(let i=0; i<canvas.height; i+=grid) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
         
-        ctx.lineCap = 'round';
-        state.members.forEach(m => { ctx.strokeStyle = '#f5f6fa'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke(); });
-        state.supports.forEach(s => {
-            ctx.fillStyle = '#4cd137'; ctx.beginPath();
-            if (s.type === 'fixed') ctx.fillRect(s.x - 5, s.y - 20, 10, 40);
-            else if (s.type === 'pinned') { ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - 12, s.y + 18); ctx.lineTo(s.x + 12, s.y + 18); ctx.fill(); }
-            else { ctx.arc(s.x, s.y + 10, 8, 0, Math.PI * 2); ctx.fill(); }
-        });
+        state.members.forEach(m => { ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke(); });
+        state.supports.forEach(s => { ctx.fillStyle = '#4cd137'; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x-10, s.y+15); ctx.lineTo(s.x+10, s.y+15); ctx.fill(); });
         state.loads.forEach(l => {
-            ctx.strokeStyle = '#e84118'; ctx.fillStyle = '#e84118'; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(l.x, l.y - 40); ctx.lineTo(l.x, l.y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(l.x - 6, l.y - 10); ctx.lineTo(l.x, l.y); ctx.lineTo(l.x + 6, l.y - 10); ctx.fill();
+            ctx.fillStyle = l.type==='p' ? '#e84118' : l.type==='m' ? '#f1c40f' : '#00a8ff';
+            ctx.beginPath();
+            if(l.type==='p') { ctx.fillRect(l.x-2, l.y-30, 4, 30); }
+            else if(l.type==='m') { ctx.arc(l.x, l.y, 15, 0, Math.PI*1.5); ctx.stroke(); }
+            else if(l.type==='w') { ctx.fillRect(l.x-40, l.y-15, 80, 5); }
         });
     }
 
-    // Mathematical Engine for Scrubber
-    let analyticalData = { L: 0, P: 0, a: 0 }; 
-    
-    function runSolver() {
-        if (!state.stable || state.members.length === 0) return;
-        const m = state.members[0];
-        analyticalData.L = Math.hypot(m.x2 - m.x1, m.y2 - m.y1) / gridSpacing; // Length in meters
-        if (state.loads.length > 0) {
-            analyticalData.P = Math.abs(state.loads[0].mag);
-            analyticalData.a = Math.hypot(state.loads[0].x - m.x1, state.loads[0].y - m.y1) / gridSpacing; // Load position
-        } else { analyticalData.P = 0; }
-        updateScrubber();
-    }
-
-    function updateScrubber() {
-        if (!state.stable) return;
-        const percent = document.getElementById('x-scrubber').value / 100;
-        const x = analyticalData.L * percent;
-        const L = analyticalData.L, P = analyticalData.P, a = analyticalData.a || L/2;
-        
-        // Statics formulas for simply supported beam
-        let V = 0, M = 0, D = 0;
-        const R1 = P * (L - a) / L;
-        const R2 = P * a / L;
-
-        if (x < a) {
-            V = R1;
-            M = R1 * x;
-        } else {
-            V = -R2;
-            M = R1 * a - R2 * (x - a);
-        }
-        // Approximate deflection envelope for visualization
-        D = M * (L*L) / (100000); 
-
-        document.getElementById('scrubber-display').innerText = `x = ${x.toFixed(2)}m | V: ${V.toFixed(1)}kN | M: ${M.toFixed(1)}kNm`;
-
-        drawGraph('shearCanvas', '#00a8ff', percent, V, 20);
-        drawGraph('momentCanvas', '#e84118', percent, M, 1);
-        drawGraph('deflectionCanvas', '#4cd137', percent, D, 500);
-    }
-
-    function drawGraph(id, color, scrubPct, activeVal, scale) {
-        const c = document.getElementById(id), g = c.getContext('2d');
-        g.clearRect(0,0,c.width,c.height);
-        
-        // Base line
-        g.strokeStyle = '#7f8fa6'; g.lineWidth = 1;
-        g.beginPath(); g.moveTo(20, c.height/2); g.lineTo(c.width-20, c.height/2); g.stroke();
-
-        if (analyticalData.P === 0) return;
-
-        // Scrubber Line
-        const curX = 20 + (c.width - 40) * scrubPct;
-        g.strokeStyle = '#f5f6fa'; g.setLineDash([5,5]); g.lineWidth = 1;
-        g.beginPath(); g.moveTo(curX, 0); g.lineTo(curX, c.height); g.stroke(); g.setLineDash([]);
-        
-        // Active Value Dot
-        g.fillStyle = color;
-        g.beginPath(); g.arc(curX, c.height/2 - (activeVal * scale), 5, 0, Math.PI*2); g.fill();
-    }
-
-    function clearDiagrams() { ['shearCanvas', 'momentCanvas', 'deflectionCanvas'].forEach(id => { const c = document.getElementById(id); c.getContext('2d').clearRect(0,0,c.width,c.height); }); }
-    function clearAll() { state.members = []; state.supports = []; state.loads = []; document.getElementById('x-scrubber').value = 50; evaluateStability(); render(); }
-    
+    function clearAll() { state = { mode: 'member', isDragging: false, startX: 0, startY: 0, members: [], supports: [], loads: [] }; solveAndRender(); }
+    window.addEventListener('resize', () => { canvas.width = document.getElementById('canvas-container').clientWidth; canvas.height = document.getElementById('canvas-container').clientHeight; solveAndRender(); });
+    window.dispatchEvent(new Event('resize'));
 </script>
 </body>
 </html>
