@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hand-Drawn Structural Analysis</title>
+    <style>
+        body { font-family: system-ui; text-align: center; background: #f0f2f5; }
+        #canvas { background: white; border: 2px solid #333; cursor: crosshair; touch-action: none; }
+        .toolbar { margin: 20px; }
+        button { padding: 10px 15px; font-size: 16px; cursor: pointer; border-radius: 8px; border: 1px solid #ccc; }
+        .analyze-btn { background: #28a745; color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Structural Sketchpad</h1>
+    <div class="toolbar">
+        <button onclick="mode='member'">Draw Member</button>
+        <button onclick="mode='support'">Add Support</button>
+        <button onclick="mode='load'">Apply Load</button>
+        <button onclick="clearCanvas()">Clear</button>
+        <button class="analyze-btn" onclick="runAnalysis()">ANALYZE</button>
+    </div>
+    <canvas id="canvas" width="800" height="500"></canvas>
+    <div id="output"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let mode = 'member';
+        let members = [];
+        let drawing = false;
+        let startPoint = null;
+
+        canvas.onmousedown = (e) => {
+            drawing = true;
+            startPoint = { x: e.offsetX, y: e.offsetY };
+        };
+
+        canvas.onmouseup = (e) => {
+            if (!drawing) return;
+            const endPoint = { x: e.offsetX, y: e.offsetY };
+            if (mode === 'member') {
+                members.push({ x1: startPoint.x, y1: startPoint.y, x2: endPoint.x, y2: endPoint.y });
+            }
+            drawing = false;
+            drawEverything();
+        };
+
+        function drawEverything() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            members.forEach(m => {
+                ctx.beginPath();
+                ctx.moveTo(m.x1, m.y1);
+                ctx.lineTo(m.x2, m.y2);
+                ctx.stroke();
+            });
+        }
+
+        function runAnalysis() {
+            // This links to the Direct Stiffness Method principles from Hibbeler/Leet
+            document.getElementById('output').innerHTML = "<h3>Analysis Results</h3><p>Calculating Global Stiffness Matrix...</p>";
+            console.log("Analyzing", members.length, "elements.");
+            // Solver logic would be called here
+        }
+
+        function clearCanvas() {
+            members = [];
+            drawEverything();
+            document.getElementById('output').innerHTML = "";
+        }
+    </script>
+</body>
+</html>
