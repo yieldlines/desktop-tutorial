@@ -1,50 +1,60 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Structural Solver Pro</title>
+    <title>Structural Analysis Pro Dashboard</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; padding: 20px; }
-        .container { display: flex; gap: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .sidebar { width: 250px; display: flex; flex-direction: column; gap: 15px; }
-        canvas { border: 2px solid #333; background: #fff; cursor: crosshair; touch-action: none; }
-        button { padding: 10px; cursor: pointer; font-weight: bold; border-radius: 6px; border: 1px solid #ccc; background: #fff; }
-        button.active { background: #007bff; color: white; }
-        .results-area { margin-top: 20px; width: 800px; background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
-        th { background: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; background: #f4f7f6; }
+        .header { background: #2c3e50; color: white; padding: 15px; text-align: center; }
+        .app-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 300px; background: white; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; gap: 15px; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        .canvas-area { flex: 1; display: flex; justify-content: center; align-items: center; background: #e9ecef; position: relative; }
+        canvas { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: crosshair; }
+        .results-panel { width: 350px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; }
+        button { padding: 12px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: bold; transition: 0.3s; }
+        button.active { background: #3498db; color: white; border-color: #2980b9; }
+        .result-card { background: #f8f9fa; border-left: 5px solid #3498db; padding: 10px; margin-bottom: 10px; font-size: 14px; }
+        .calc-btn { background: #27ae60; color: white; border: none; font-size: 16px; margin-top: 10px; }
+        .calc-btn:hover { background: #219150; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="sidebar">
-        <h3>Inputs</h3>
-        <label>Member EI:</label>
-        <input type="number" id="prop-ei" value="20000">
-        <label>Load (kN):</label>
-        <input type="number" id="prop-load" value="10">
-        <hr>
-        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
-        <button id="btn-support" onclick="setMode('support')">Add Support (Pin)</button>
-        <button id="btn-load" onclick="setMode('load')">Apply Load</button>
-        <button onclick="calculate()" style="background:#28a745; color:white; border:none;">ANALYZE & SHOW RESULTS</button>
-        <button onclick="location.reload()" style="color:red">Clear All</button>
-    </div>
-
-    <div>
-        <canvas id="canvas" width="800" height="450"></canvas>
-    </div>
+<div class="header">
+    <h2>Structural Analysis Sketchpad v1.0</h2>
 </div>
 
-<div class="results-area" id="results">
-    <b>Analysis Results:</b> No data yet. Draw a structure with at least one member, two supports, and a load.
+<div class="app-container">
+    <div class="sidebar">
+        <div class="input-group">
+            <label>Member Stiffness (EI):</label>
+            <input type="number" id="input-ei" value="20000" style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div class="input-group">
+            <label>Load Magnitude (kN):</label>
+            <input type="number" id="input-load" value="50" style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <hr style="width: 100%">
+        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
+        <button id="btn-support" onclick="setMode('support')">Add Support</button>
+        <button id="btn-load" onclick="setMode('load')">Place Load</button>
+        <button class="calc-btn" onclick="analyzeStructure()">RUN ANALYSIS</button>
+        <button onclick="location.reload()" style="color: #e74c3c;">Reset Canvas</button>
+    </div>
+
+    <div class="canvas-area">
+        <canvas id="mainCanvas" width="700" height="500"></canvas>
+    </div>
+
+    <div class="results-panel" id="results-display">
+        <h3>Analysis Results</h3>
+        <p style="color: #7f8c8d;">Sketch a beam with supports and a load, then click Run Analysis.</p>
+    </div>
 </div>
 
 <script>
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
-    let mode = 'member', members = [], supports = [], loads = [], isDrawing = false, startX, startY;
+    let mode = 'member', members = [], supports = [], loads = [], isDrawing = false, sX, sY;
 
     function setMode(m) {
         mode = m;
@@ -54,56 +64,64 @@
 
     canvas.onmousedown = (e) => {
         const rect = canvas.getBoundingClientRect();
-        startX = e.offsetX; startY = e.offsetY;
+        sX = e.clientX - rect.left; sY = e.clientY - rect.top;
         isDrawing = true;
-        if (mode === 'support') { supports.push({ x: startX, y: startY }); render(); }
-        else if (mode === 'load') { loads.push({ x: startX, y: startY, p: document.getElementById('prop-load').value }); render(); }
+        if (mode === 'support') { supports.push({ x: sX, y: sY }); draw(); }
+        else if (mode === 'load') { loads.push({ x: sX, y: sY, val: document.getElementById('input-load').value }); draw(); }
     };
 
     canvas.onmouseup = (e) => {
         if (mode === 'member' && isDrawing) {
-            members.push({ x1: startX, y1: startY, x2: e.offsetX, y2: e.offsetY, ei: document.getElementById('prop-ei').value });
+            const rect = canvas.getBoundingClientRect();
+            members.push({ x1: sX, y1: sY, x2: e.clientX - rect.left, y2: e.clientY - rect.top, ei: document.getElementById('input-ei').value });
         }
-        isDrawing = false; render();
+        isDrawing = false; draw();
     };
 
-    function render() {
+    function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         members.forEach(m => {
-            ctx.strokeStyle = '#333'; ctx.lineWidth = 4;
+            ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 5;
             ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
-            ctx.fillStyle = 'blue'; ctx.fillText("EI="+m.ei, (m.x1+m.x2)/2, (m.y1+m.y2)/2 - 5);
+            ctx.fillStyle = "#3498db"; ctx.fillText("EI: " + m.ei, (m.x1+m.x2)/2, (m.y1+m.y2)/2 - 10);
         });
         supports.forEach(s => {
-            ctx.fillStyle = 'red'; ctx.beginPath(); ctx.moveTo(s.x, s.y); 
-            ctx.lineTo(s.x-10, s.y+15); ctx.lineTo(s.x+10, s.y+15); ctx.fill();
+            ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x-12, s.y+20); ctx.lineTo(s.x+12, s.y+20); ctx.fill();
         });
         loads.forEach(l => {
-            ctx.strokeStyle = 'green'; ctx.fillStyle = 'green';
-            ctx.beginPath(); ctx.moveTo(l.x, l.y-30); ctx.lineTo(l.x, l.y); ctx.stroke();
-            ctx.fillText(l.p + "kN", l.x + 5, l.y - 15);
+            ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(l.x, l.y-40); ctx.lineTo(l.x, l.y); ctx.stroke();
+            ctx.fillStyle = '#27ae60'; ctx.fillText(l.val + "kN", l.x + 5, l.y - 25);
         });
     }
 
-    function calculate() {
-        if(members.length === 0 || supports.length < 2) {
-            alert("Need 1 member and 2 supports (stability)."); return;
+    function analyzeStructure() {
+        if (members.length === 0 || supports.length < 2) {
+            alert("Analysis requires at least 1 member and 2 supports (Pins)."); return;
         }
 
-        // Simplification for result display:
-        // We calculate based on basic Beam Theory (M = PL/4 for point load center)
-        let html = "<h3>Member Forces & Reactions</h3><table><tr><th>Element</th><th>Length (px)</th><th>Max Moment (kN-px)</th><th>Status</th></tr>";
+        const resDiv = document.getElementById('results-display');
+        resDiv.innerHTML = "<h3>Analysis Results</h3>";
         
         members.forEach((m, i) => {
-            let L = Math.sqrt(Math.pow(m.x2-m.x1, 2) + Math.pow(m.y2-m.y1, 2));
-            let totalLoad = loads.reduce((sum, l) => sum + parseFloat(l.p), 0);
-            let maxM = (totalLoad * L) / 4; // Simple beam approximation
+            // L = Distance formula
+            let L = Math.sqrt(Math.pow(m.x2-m.x1, 2) + Math.pow(m.y2-m.y1, 2)) / 10; // scaled for visibility
+            let P = loads.length > 0 ? parseFloat(loads[0].val) : 0;
             
-            html += `<tr><td>Member ${i+1}</td><td>${L.toFixed(1)}</td><td>${maxM.toFixed(1)}</td><td>Stable</td></tr>`;
+            // Hibbeler Formula: Max Moment = PL/4 for central point load
+            let maxMoment = (P * L) / 4;
+            let reaction = P / 2;
+
+            resDiv.innerHTML += `
+                <div class="result-card">
+                    <b>Member ${i+1}</b><br>
+                    Length: ${L.toFixed(2)} m<br>
+                    Max Moment: ${maxMoment.toFixed(2)} kN·m<br>
+                    Reactions: ${reaction.toFixed(2)} kN (at each support)
+                </div>
+            `;
         });
-        
-        html += "</table>";
-        document.getElementById('results').innerHTML = html;
     }
 </script>
 </body>
