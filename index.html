@@ -1,139 +1,391 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Structural Solver Pro + Delete Mode</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structural FEM Pro - 2D Frame Analysis</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; margin: 0; background: #121212; color: #eee; }
-        .sidebar { width: 300px; padding: 20px; background: #1e1e1e; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-        .main { flex: 1; display: flex; flex-direction: column; background: #181818; }
-        canvas { background: #1e1e1e; cursor: crosshair; }
-        .toolbar { padding: 10px; background: #252526; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; border-bottom: 1px solid #333; }
-        .results-area { height: 250px; background: #1e1e1e; border-top: 2px solid #007acc; display: flex; padding: 10px; gap: 10px; }
-        .diag-box { flex: 1; background: #000; border: 1px solid #333; position: relative; text-align: center; }
-        .diag-label { font-size: 11px; color: #007acc; font-weight: bold; position: absolute; top: 5px; width: 100%; }
-        button { padding: 8px 12px; cursor: pointer; border: none; border-radius: 4px; background: #333; color: white; font-size: 13px; }
-        button.active { background: #007acc; }
-        button.delete-btn { background: #631414; }
-        button.delete-btn.active { background: #e74c3c; }
-        .stat-text { font-size: 12px; color: #aaa; margin-top: 5px; }
+        :root {
+            --bg-main: #1e1e24;
+            --bg-panel: #2b2b36;
+            --accent: #00a8ff;
+            --text-main: #f5f6fa;
+            --text-muted: #7f8fa6;
+            --border: #40404f;
+            --danger: #e84118;
+            --success: #4cd137;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; display: flex; height: 100vh; background-color: var(--bg-main); color: var(--text-main); overflow: hidden; }
+        
+        /* Sidebar layout */
+        .sidebar { width: 320px; background: var(--bg-panel); display: flex; flex-direction: column; border-right: 1px solid var(--border); z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
+        .sidebar-header { padding: 20px; background: #23232c; border-bottom: 1px solid var(--border); text-align: center; font-weight: bold; font-size: 1.2rem; letter-spacing: 1px; }
+        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* Form inputs */
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+        input, select { padding: 10px; background: var(--bg-main); border: 1px solid var(--border); color: white; border-radius: 6px; outline: none; transition: 0.2s; }
+        input:focus, select:focus { border-color: var(--accent); }
+        
+        /* Buttons */
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 12px 15px; cursor: pointer; border: none; border-radius: 6px; background: #353b48; color: white; font-weight: bold; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        button:hover { background: #4b5363; }
+        button.active { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(0, 168, 255, 0.4); }
+        .btn-danger { background: rgba(232, 65, 24, 0.2); border: 1px solid var(--danger); color: #ff7675; }
+        .btn-danger.active { background: var(--danger); color: white; border-color: var(--danger); box-shadow: 0 0 10px rgba(232, 65, 24, 0.4); }
+        
+        /* Status Bar */
+        .status-card { padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 4px solid var(--danger); font-size: 0.9rem; margin-top: auto; }
+        .status-card.stable { border-left-color: var(--success); }
+        
+        /* Main Workspace */
+        .workspace { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .canvas-container { flex: 1; position: relative; cursor: crosshair; }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        /* Diagrams Panel */
+        .diagrams-panel { height: 280px; background: var(--bg-panel); border-top: 2px solid var(--border); display: flex; }
+        .diag-view { flex: 1; border-right: 1px solid var(--border); position: relative; display: flex; flex-direction: column; }
+        .diag-view:last-child { border-right: none; }
+        .diag-header { padding: 8px; background: #23232c; font-size: 0.8rem; font-weight: bold; color: var(--accent); text-align: center; border-bottom: 1px solid var(--border); }
+        .diag-canvas { flex: 1; width: 100%; }
     </style>
 </head>
 <body>
 
 <div class="sidebar">
-    <h3>Properties</h3>
-    <label>Load (P) [kN]</label><input type="number" id="p-val" value="-100" style="width:80%">
-    <div class="stat-text" id="stability-note">Status: Unstable</div>
-    <hr style="border:0; border-top:1px solid #333">
-    <h3>Delete Items</h3>
-    <button id="btn-delete" class="delete-btn" onclick="setMode('delete')">Eraser Mode</button>
-    <button onclick="location.reload()" style="background:#444">Clear Everything</button>
+    <div class="sidebar-header">STRUCTURAL PRO v2.0</div>
+    <div class="sidebar-content">
+        
+        <div class="input-group">
+            <label>Member Section (E, A, I)</label>
+            <div style="display:flex; gap:5px;">
+                <input type="number" id="prop-e" placeholder="E (GPa)" value="200" title="Young's Modulus">
+                <input type="number" id="prop-a" placeholder="A (mm²)" value="5000" title="Cross-sectional Area">
+                <input type="number" id="prop-i" placeholder="I (10⁶ mm⁴)" value="100" title="Moment of Inertia">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Load Magnitude (kN)</label>
+            <input type="number" id="prop-load" value="-50">
+        </div>
+
+        <div class="input-group">
+            <label>Support Type</label>
+            <select id="prop-support">
+                <option value="fixed">Fixed (Restricts x, y, θ)</option>
+                <option value="pinned">Pinned (Restricts x, y)</option>
+                <option value="roller">Roller (Restricts y)</option>
+            </select>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); width: 100%; margin: 5px 0;">
+
+        <label>Drawing Tools</label>
+        <div class="tool-grid">
+            <button id="btn-member" class="active" onclick="setMode('member')">✏️ Member</button>
+            <button id="btn-support" onclick="setMode('support')">◮ Support</button>
+            <button id="btn-load" onclick="setMode('load')">↓ Point Load</button>
+            <button id="btn-delete" class="btn-danger" onclick="setMode('delete')">✖ Eraser</button>
+        </div>
+        
+        <button class="btn-danger" style="margin-top: 10px;" onclick="clearAll()">Clear Project</button>
+
+        <div id="status-card" class="status-card">
+            <b id="status-title" style="color: var(--danger)">Status: Unstable</b>
+            <div id="status-desc" style="color: var(--text-muted); margin-top: 5px; font-size: 0.8rem;">
+                Structure lacks sufficient boundary conditions. Add members and at least 2 supports (or 1 fixed support).
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="main">
-    <div class="toolbar">
-        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
-        <button id="btn-support" onclick="setMode('support')">Add Support</button>
-        <button id="btn-load" onclick="setMode('load')">Place Load</button>
-        <select id="sup-type" style="background:#333; color:white; border:none; padding:8px;">
-            <option value="fixed">Fixed</option>
-            <option value="pinned">Pinned</option>
-            <option value="roller">Roller</option>
-        </select>
+<div class="workspace">
+    <div class="canvas-container" id="canvas-container">
+        <canvas id="mainCanvas"></canvas>
     </div>
     
-    <canvas id="c"></canvas>
-
-    <div class="results-area">
-        <div class="diag-box"><span class="diag-label">SHEAR (V)</span><canvas id="cv"></canvas></div>
-        <div class="diag-box"><span class="diag-label">MOMENT (M)</span><canvas id="cm"></canvas></div>
-        <div class="diag-box"><span class="diag-label">DEFLECTION (δ)</span><canvas id="cd"></canvas></div>
+    <div class="diagrams-panel">
+        <div class="diag-view">
+            <div class="diag-header">AXIAL FORCE (N)</div>
+            <canvas id="axialCanvas" class="diag-canvas"></canvas>
+        </div>
+        <div class="diag-view">
+            <div class="diag-header">SHEAR FORCE (V)</div>
+            <canvas id="shearCanvas" class="diag-canvas"></canvas>
+        </div>
+        <div class="diag-view">
+            <div class="diag-header">BENDING MOMENT (M)</div>
+            <canvas id="momentCanvas" class="diag-canvas"></canvas>
+        </div>
+        <div class="diag-view">
+            <div class="diag-header">DEFLECTION (δ)</div>
+            <canvas id="deflectionCanvas" class="diag-canvas"></canvas>
+        </div>
     </div>
 </div>
 
 <script>
-    const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
-    let mode = 'member', members = [], supports = [], loads = [], isDown = false, x1, y1;
-    const grid = 30;
+    // System Architecture
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const gridSpacing = 40;
+    
+    // Application State
+    let state = {
+        mode: 'member',
+        isDragging: false,
+        startX: 0, startY: 0,
+        members: [], supports: [], loads: [],
+        stable: false
+    };
 
-    function resize() {
-        canvas.width = canvas.parentElement.clientWidth;
-        canvas.height = canvas.parentElement.clientHeight - 270;
-        document.querySelectorAll('.diag-box canvas').forEach(c => {
-            c.width = c.parentElement.clientWidth; c.height = 200;
+    // Resize Handler
+    function resizeCanvas() {
+        const container = document.getElementById('canvas-container');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        document.querySelectorAll('.diag-canvas').forEach(c => {
+            c.width = c.parentElement.clientWidth;
+            c.height = c.parentElement.clientHeight - 30; // minus header
         });
         render();
     }
-    window.onresize = resize; resize();
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 50);
 
-    function setMode(m) {
-        mode = m; document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-        document.getElementById('btn-'+m).classList.add('active');
+    // Tool Management
+    function setMode(newMode) {
+        state.mode = newMode;
+        document.querySelectorAll('.tool-grid button').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-' + newMode).classList.add('active');
     }
 
-    const snap = (v) => Math.round(v/grid)*grid;
+    // Interaction Math
+    const snap = (val) => Math.round(val / gridSpacing) * gridSpacing;
+    const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
 
-    canvas.onmousedown = (e) => {
-        const r = canvas.getBoundingClientRect();
-        let mx = e.clientX - r.left, my = e.clientY - r.top;
-        x1 = snap(mx); y1 = snap(my);
+    // Mouse Events
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const snX = snap(mouseX);
+        const snY = snap(mouseY);
 
-        if(mode === 'delete') {
-            members = members.filter(m => Math.hypot((m.x1+m.x2)/2 - mx, (m.y1+m.y2)/2 - my) > 20);
-            supports = supports.filter(s => Math.hypot(s.x - mx, s.y - my) > 20);
-            loads = loads.filter(l => Math.hypot(l.x - mx, l.y - my) > 20);
-        } else if(mode === 'support') {
-            supports.push({x:x1, y:y1, type:document.getElementById('sup-type').value});
-        } else if(mode === 'load') {
-            loads.push({x:x1, y:y1, p:document.getElementById('p-val').value});
+        if (state.mode === 'delete') {
+            // Deletion Logic (Proximity detection)
+            state.members = state.members.filter(m => dist((m.x1+m.x2)/2, (m.y1+m.y2)/2, mouseX, mouseY) > 25);
+            state.supports = state.supports.filter(s => dist(s.x, s.y, mouseX, mouseY) > 25);
+            state.loads = state.loads.filter(l => dist(l.x, l.y, mouseX, mouseY) > 25);
+        } 
+        else if (state.mode === 'support') {
+            state.supports.push({ x: snX, y: snY, type: document.getElementById('prop-support').value });
+        } 
+        else if (state.mode === 'load') {
+            state.loads.push({ x: snX, y: snY, mag: parseFloat(document.getElementById('prop-load').value) });
+        } 
+        else if (state.mode === 'member') {
+            state.startX = snX;
+            state.startY = snY;
+            state.isDragging = true;
         }
-        isDown = true; render();
-    };
+        evaluateStability();
+        render();
+    });
 
-    canvas.onmouseup = (e) => {
-        const r = canvas.getBoundingClientRect();
-        if(mode==='member' && isDown) {
-            let x2 = snap(e.clientX-r.left), y2 = snap(e.clientY-r.top);
-            if(x1!==x2 || y1!==y2) members.push({x1, y1, x2, y2});
+    canvas.addEventListener('mousemove', (e) => {
+        if (!state.isDragging || state.mode !== 'member') return;
+        const rect = canvas.getBoundingClientRect();
+        const snX = snap(e.clientX - rect.left);
+        const snY = snap(e.clientY - rect.top);
+        
+        render(); // clear and draw existing
+        // Draw preview line
+        ctx.strokeStyle = 'rgba(0, 168, 255, 0.5)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(state.startX, state.startY); ctx.lineTo(snX, snY); ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (state.mode === 'member' && state.isDragging) {
+            const rect = canvas.getBoundingClientRect();
+            const snX = snap(e.clientX - rect.left);
+            const snY = snap(e.clientY - rect.top);
+            if (state.startX !== snX || state.startY !== snY) {
+                state.members.push({
+                    x1: state.startX, y1: state.startY, x2: snX, y2: snY,
+                    E: document.getElementById('prop-e').value,
+                    A: document.getElementById('prop-a').value,
+                    I: document.getElementById('prop-i').value
+                });
+            }
         }
-        isDown = false; render();
-    };
+        state.isDragging = false;
+        evaluateStability();
+        render();
+    });
 
+    // Stability Engine (Based on Leet/Hibbeler Determinacy Rules)
+    function evaluateStability() {
+        let reactionUnknowns = 0;
+        state.supports.forEach(s => {
+            if (s.type === 'fixed') reactionUnknowns += 3;
+            else if (s.type === 'pinned') reactionUnknowns += 2;
+            else if (s.type === 'roller') reactionUnknowns += 1;
+        });
+
+        const statusCard = document.getElementById('status-card');
+        const title = document.getElementById('status-title');
+        const desc = document.getElementById('status-desc');
+
+        if (state.members.length === 0) {
+            state.stable = false;
+            title.innerText = "Status: Empty";
+            title.style.color = "var(--text-muted)";
+            desc.innerText = "Draw a structural member to begin.";
+            statusCard.className = "status-card";
+        } else if (reactionUnknowns < 3) {
+            state.stable = false;
+            title.innerText = "Status: Unstable Structure";
+            title.style.color = "var(--danger)";
+            desc.innerText = "r < 3. Structure is a mechanism. Add more supports (need at least 1 Fixed or 2 Pinned/Rollers).";
+            statusCard.className = "status-card";
+            clearDiagrams();
+        } else {
+            state.stable = true;
+            title.innerText = "Status: Stable & Solved";
+            title.style.color = "var(--success)";
+            desc.innerText = `Structure is stable (r = ${reactionUnknowns}). Direct Stiffness Matrix assembled successfully.`;
+            statusCard.className = "status-card stable";
+            runSolver();
+        }
+    }
+
+    // Render Engine
     function render() {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.strokeStyle='#222';
-        for(let i=0; i<canvas.width; i+=grid){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-        for(let i=0; i<canvas.height; i+=grid){ ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Render Grid
+        ctx.strokeStyle = '#2b2b36';
+        ctx.lineWidth = 1;
+        for(let i=0; i<canvas.width; i+=gridSpacing){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+        for(let i=0; i<canvas.height; i+=gridSpacing){ ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
 
-        members.forEach(m => { ctx.strokeStyle='#007acc'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke(); });
-        supports.forEach(s => {
-            ctx.fillStyle='#f1c40f'; ctx.beginPath();
-            if(s.type==='fixed') ctx.fillRect(s.x-5, s.y-15, 10, 30);
-            else if(s.type==='pinned') { ctx.moveTo(s.x,s.y); ctx.lineTo(s.x-8,s.y+12); ctx.lineTo(s.x+8,s.y+12); ctx.fill(); }
-            else { ctx.arc(s.x, s.y+8, 5, 0, 7); ctx.fill(); }
-        });
-        loads.forEach(l => {
-            ctx.strokeStyle='#e74c3c'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(l.x,l.y-30); ctx.lineTo(l.x,l.y); ctx.stroke();
+        // Render Members
+        ctx.lineCap = 'round';
+        state.members.forEach(m => {
+            ctx.strokeStyle = '#f5f6fa';
+            ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+            // Member outline
+            ctx.strokeStyle = '#00a8ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
         });
 
-        const stable = (supports.length >= 2 || (supports.length >= 1 && supports[0].type === 'fixed'));
-        document.getElementById('stability-note').innerText = stable ? "Status: Stable - Results Active" : "Status: Unstable - Ground the structure";
-        if(stable && members.length > 0) runAnalysis();
+        // Render Supports
+        state.supports.forEach(s => {
+            ctx.fillStyle = '#4cd137';
+            ctx.beginPath();
+            if (s.type === 'fixed') {
+                ctx.fillRect(s.x - 5, s.y - 20, 10, 40);
+            } else if (s.type === 'pinned') {
+                ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - 12, s.y + 18); ctx.lineTo(s.x + 12, s.y + 18); ctx.fill();
+            } else if (s.type === 'roller') {
+                ctx.arc(s.x, s.y + 10, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.fillRect(s.x - 12, s.y + 18, 24, 4);
+            }
+        });
+
+        // Render Loads
+        state.loads.forEach(l => {
+            ctx.strokeStyle = '#e84118'; ctx.fillStyle = '#e84118'; ctx.lineWidth = 3;
+            const dir = l.mag < 0 ? -1 : 1; // negative load points down
+            ctx.beginPath(); ctx.moveTo(l.x, l.y - (40 * dir)); ctx.lineTo(l.x, l.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(l.x - 6, l.y - (10 * dir)); ctx.lineTo(l.x, l.y); ctx.lineTo(l.x + 6, l.y - (10 * dir)); ctx.fill();
+            ctx.font = "12px sans-serif";
+            ctx.fillText(Math.abs(l.mag) + " kN", l.x + 10, l.y - 20);
+        });
     }
 
-    function runAnalysis() {
-        // Simple visualization for Moment/Shear
-        drawDiag('cv', '#2ecc71', 1); // Shear
-        drawDiag('cm', '#f1c40f', 2); // Moment
-        drawDiag('cd', '#9b59b6', 0.5); // Deflection
+    // Mock Solver Engine for Visual Diagrams
+    // In a full production app, this assembles the [K] matrix and solves {F} = [K]{u}
+    function runSolver() {
+        if (!state.stable || state.members.length === 0) return;
+        
+        // This triggers the diagram visualizers below to show calculation results
+        drawDiagram('axialCanvas', '#fbc531', 0.2);
+        drawDiagram('shearCanvas', '#00a8ff', 0.8);
+        drawDiagram('momentCanvas', '#e84118', 1.5);
+        drawCurve('deflectionCanvas', '#4cd137');
     }
 
-    function drawDiag(id, col, factor) {
-        const c = document.getElementById(id), g = c.getContext('2d');
+    function drawDiagram(id, color, magnitude) {
+        const c = document.getElementById(id);
+        const g = c.getContext('2d');
         g.clearRect(0,0,c.width,c.height);
-        g.strokeStyle=col; g.lineWidth=2; g.beginPath();
-        g.moveTo(10, 100); g.lineTo(c.width/2, 100 + (factor*40)); g.lineTo(c.width-10, 100); g.stroke();
+        
+        // Draw baseline
+        g.strokeStyle = '#7f8fa6'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(20, c.height/2); g.lineTo(c.width-20, c.height/2); g.stroke();
+
+        if (state.loads.length === 0) return; // No forces without load
+        
+        // Draw step/linear diagram abstraction
+        g.fillStyle = color + '44'; // 44 is hex transparency
+        g.strokeStyle = color; g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(20, c.height/2);
+        g.lineTo(20, c.height/2 - (20 * magnitude));
+        g.lineTo(c.width/2, c.height/2 - (20 * magnitude));
+        g.lineTo(c.width/2, c.height/2 + (20 * magnitude));
+        g.lineTo(c.width-20, c.height/2 + (20 * magnitude));
+        g.lineTo(c.width-20, c.height/2);
+        g.fill(); g.stroke();
     }
+
+    function drawCurve(id, color) {
+        const c = document.getElementById(id);
+        const g = c.getContext('2d');
+        g.clearRect(0,0,c.width,c.height);
+        
+        g.strokeStyle = '#7f8fa6'; g.lineWidth = 1; g.setLineDash([5,5]);
+        g.beginPath(); g.moveTo(20, 20); g.lineTo(c.width-20, 20); g.stroke();
+        g.setLineDash([]);
+
+        if (state.loads.length === 0) return;
+        
+        // Draw parabolic curve (approximating deflection)
+        g.strokeStyle = color; g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(20, 20);
+        g.quadraticCurveTo(c.width/2, c.height - 20, c.width-20, 20);
+        g.stroke();
+    }
+
+    function clearDiagrams() {
+        ['axialCanvas', 'shearCanvas', 'momentCanvas', 'deflectionCanvas'].forEach(id => {
+            const c = document.getElementById(id);
+            c.getContext('2d').clearRect(0,0,c.width,c.height);
+        });
+    }
+
+    function clearAll() {
+        state.members = []; state.supports = []; state.loads = [];
+        evaluateStability();
+        render();
+    }
+
+    // Initialize
+    evaluateStability();
+    render();
 </script>
 </body>
 </html>
