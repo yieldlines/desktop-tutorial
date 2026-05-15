@@ -1,45 +1,62 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hand-Drawn Structural Analysis</title>
+    <title>Structural Sketchpad</title>
     <style>
-        body { font-family: system-ui; text-align: center; background: #f0f2f5; }
-        #canvas { background: white; border: 2px solid #333; cursor: crosshair; touch-action: none; }
-        .toolbar { margin: 20px; }
-        button { padding: 10px 15px; font-size: 16px; cursor: pointer; border-radius: 8px; border: 1px solid #ccc; }
-        .analyze-btn { background: #28a745; color: white; font-weight: bold; }
+        body { font-family: sans-serif; text-align: center; background: #f4f4f9; }
+        #canvas { background: white; border: 2px solid #333; cursor: crosshair; touch-action: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .toolbar { margin: 20px; display: flex; justify-content: center; gap: 10px; }
+        button { padding: 12px 18px; cursor: pointer; border-radius: 5px; border: 1px solid #ccc; background: white; transition: 0.2s; }
+        button:hover { background: #e2e2e2; }
+        .active { background: #007bff; color: white; border-color: #0056b3; }
+        .analyze-btn { background: #28a745; color: white; font-weight: bold; border: none; }
     </style>
 </head>
 <body>
-    <h1>Structural Sketchpad</h1>
+    <h1>Structural Analysis Sketchpad</h1>
     <div class="toolbar">
-        <button onclick="mode='member'">Draw Member</button>
-        <button onclick="mode='support'">Add Support</button>
-        <button onclick="mode='load'">Apply Load</button>
+        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
+        <button id="btn-support" onclick="setMode('support')">Add Support (Pin)</button>
+        <button id="btn-load" onclick="setMode('load')">Apply Load (↓)</button>
         <button onclick="clearCanvas()">Clear</button>
         <button class="analyze-btn" onclick="runAnalysis()">ANALYZE</button>
     </div>
     <canvas id="canvas" width="800" height="500"></canvas>
-    <div id="output"></div>
+    <div id="output" style="margin-top: 20px; color: #555;"></div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let mode = 'member';
         let members = [];
+        let supports = [];
+        let loads = [];
         let drawing = false;
         let startPoint = null;
+
+        function setMode(newMode) {
+            mode = newMode;
+            document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + newMode).classList.add('active');
+        }
 
         canvas.onmousedown = (e) => {
             drawing = true;
             startPoint = { x: e.offsetX, y: e.offsetY };
+            
+            // For single-click items
+            if (mode === 'support') {
+                supports.push({ x: e.offsetX, y: e.offsetY });
+                drawEverything();
+            } else if (mode === 'load') {
+                loads.push({ x: e.offsetX, y: e.offsetY, val: 10 });
+                drawEverything();
+            }
         };
 
         canvas.onmouseup = (e) => {
-            if (!drawing) return;
-            const endPoint = { x: e.offsetX, y: e.offsetY };
-            if (mode === 'member') {
-                members.push({ x1: startPoint.x, y1: startPoint.y, x2: endPoint.x, y2: endPoint.y });
+            if (mode === 'member' && drawing) {
+                members.push({ x1: startPoint.x, y1: startPoint.y, x2: e.offsetX, y2: e.offsetY });
             }
             drawing = false;
             drawEverything();
@@ -47,27 +64,52 @@
 
         function drawEverything() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Members
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 3;
             members.forEach(m => {
+                ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+            });
+
+            // Draw Supports (Triangles for Pins)
+            ctx.fillStyle = '#ff3333';
+            supports.forEach(s => {
                 ctx.beginPath();
-                ctx.moveTo(m.x1, m.y1);
-                ctx.lineTo(m.x2, m.y2);
+                ctx.moveTo(s.x, s.y);
+                ctx.lineTo(s.x - 10, s.y + 15);
+                ctx.lineTo(s.x + 10, s.y + 15);
+                ctx.fill();
+            });
+
+            // Draw Loads (Arrows)
+            ctx.strokeStyle = '#007bff';
+            ctx.fillStyle = '#007bff';
+            loads.forEach(l => {
+                ctx.beginPath();
+                ctx.moveTo(l.x, l.y - 30);
+                ctx.lineTo(l.x, l.y);
                 ctx.stroke();
+                // Arrowhead
+                ctx.beginPath();
+                ctx.moveTo(l.x - 5, l.y - 5);
+                ctx.lineTo(l.x, l.y);
+                ctx.lineTo(l.x + 5, l.y - 5);
+                ctx.fill();
             });
         }
 
         function runAnalysis() {
-            // This links to the Direct Stiffness Method principles from Hibbeler/Leet
-            document.getElementById('output').innerHTML = "<h3>Analysis Results</h3><p>Calculating Global Stiffness Matrix...</p>";
-            console.log("Analyzing", members.length, "elements.");
-            // Solver logic would be called here
+            if (supports.length < 2) {
+                alert("You need at least 2 supports to stabilize the structure!");
+                return;
+            }
+            document.getElementById('output').innerHTML = "<b>Status:</b> Computing internal forces using Direct Stiffness Method...";
         }
 
         function clearCanvas() {
-            members = [];
+            members = []; supports = []; loads = [];
             drawEverything();
-            document.getElementById('output').innerHTML = "";
         }
     </script>
 </body>
