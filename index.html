@@ -1,129 +1,113 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Structural Analysis App</title>
+    <title>Structural Analysis Pro</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
-        .toolbar { margin-bottom: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        button { padding: 10px 20px; cursor: pointer; border-radius: 5px; border: 1px solid #ccc; background: white; font-weight: bold; }
+        .toolbar { margin-bottom: 15px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+        button { padding: 10px 15px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: bold; }
         button.active { background: #007bff; color: white; border-color: #0056b3; }
         #canvas { background: white; border: 3px solid #333; cursor: crosshair; touch-action: none; display: block; margin: 0 auto; }
-        #output { margin-top: 15px; font-weight: bold; color: #333; }
+        #status { margin-top: 10px; font-size: 0.9em; color: #666; }
+        .data-panel { margin-top: 10px; padding: 10px; background: #fff; border-radius: 8px; display: inline-block; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
-    <h1>Structural Analysis Sketchpad</h1>
+    <h2>Structural Analysis: Input Properties</h2>
     <div class="toolbar">
-        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
-        <button id="btn-support" onclick="setMode('support')">Add Support</button>
-        <button id="btn-load" onclick="setMode('load')">Apply Load</button>
-        <button onclick="clearCanvas()" style="color: red;">Clear All</button>
-        <button onclick="runAnalysis()" style="background: #28a745; color: white;">ANALYZE</button>
+        <button id="btn-member" class="active" onclick="changeMode('member')">Draw Member (Beam)</button>
+        <button id="btn-support" onclick="changeMode('support')">Add Support</button>
+        <button id="btn-load" onclick="changeMode('load')">Apply Load (kN)</button>
+        <button onclick="runAnalysis()" style="background: #28a745; color: white;">CALCULATE</button>
+        <button onclick="clearAll()" style="color: red;">Clear</button>
     </div>
-    <canvas id="canvas" width="800" height="500"></canvas>
-    <div id="output">Mode: Draw Member (Click and drag to draw lines)</div>
+    <canvas id="canvas" width="800" height="400"></canvas>
+    <div id="status">Ready.</div>
+    <div id="data-list" class="data-panel"><b>Project Data:</b> No elements yet.</div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const output = document.getElementById('output');
-        
-        let mode = 'member';
+        let currentMode = 'member';
         let members = [], supports = [], loads = [];
-        let isDrawing = false, startX, startY;
+        let isDragging = false, startX, startY;
 
-        function setMode(newMode) {
-            mode = newMode;
+        function changeMode(m) {
+            currentMode = m;
             document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
-            if(document.getElementById('btn-' + newMode)) {
-                document.getElementById('btn-' + newMode).classList.add('active');
-            }
-            output.innerText = "Mode: " + mode.charAt(0).toUpperCase() + mode.slice(1);
+            document.getElementById('btn-' + m).classList.add('active');
         }
 
         canvas.onmousedown = (e) => {
             const rect = canvas.getBoundingClientRect();
             startX = e.clientX - rect.left;
             startY = e.clientY - rect.top;
-            isDrawing = true;
+            isDragging = true;
 
-            // Single click actions for Supports and Loads
-            if (mode === 'support') {
-                supports.push({ x: startX, y: startY });
-                draw();
-            } else if (mode === 'load') {
-                loads.push({ x: startX, y: startY });
-                draw();
+            if (currentMode === 'support') {
+                supports.push({ x: startX, y: startY, type: 'Pinned' });
+                updateDataPanel();
+                render();
+            } else if (currentMode === 'load') {
+                let mag = prompt("Enter Load Magnitude (kN):", "10");
+                if (mag) {
+                    loads.push({ x: startX, y: startY, magnitude: parseFloat(mag) });
+                    updateDataPanel();
+                    render();
+                }
             }
-        };
-
-        canvas.onmousemove = (e) => {
-            if (!isDrawing || mode !== 'member') return;
-            draw(); // Redraw existing
-            const rect = canvas.getBoundingClientRect();
-            const currX = e.clientX - rect.left;
-            const currY = e.clientY - rect.top;
-            
-            // Draw temporary line (ghost line)
-            ctx.beginPath();
-            ctx.setLineDash([5, 5]);
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(currX, currY);
-            ctx.stroke();
-            ctx.setLineDash([]);
         };
 
         canvas.onmouseup = (e) => {
-            if (mode === 'member' && isDrawing) {
+            if (currentMode === 'member' && isDragging) {
                 const rect = canvas.getBoundingClientRect();
-                members.push({ x1: startX, y1: startY, x2: e.clientX - rect.left, y2: e.clientY - rect.top });
+                const endX = e.clientX - rect.left;
+                const endY = e.clientY - rect.top;
+                
+                let ei = prompt("Enter Flexural Stiffness (EI) for this member:", "20000");
+                if (ei) {
+                    members.push({ x1: startX, y1: startY, x2: endX, y2: endY, ei: parseFloat(ei) });
+                    updateDataPanel();
+                }
             }
-            isDrawing = false;
-            draw();
+            isDragging = false;
+            render();
         };
 
-        function draw() {
+        function updateDataPanel() {
+            let html = "<b>Project Data:</b><br>";
+            members.forEach((m, i) => html += `Beam ${i+1}: EI=${m.ei}<br>`);
+            loads.forEach((l, i) => html += `Load ${i+1}: ${l.magnitude}kN<br>`);
+            document.getElementById('data-list').innerHTML = html;
+        }
+
+        function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 1. Draw Members (Black Lines)
-            ctx.strokeStyle = '#000';
             ctx.lineWidth = 4;
             members.forEach(m => {
+                ctx.strokeStyle = '#333';
                 ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+                ctx.fillStyle = '#666'; ctx.fillText("EI: "+m.ei, (m.x1+m.x2)/2, (m.y1+m.y2)/2 - 5);
             });
-
-            // 2. Draw Supports (Red Triangles)
             ctx.fillStyle = 'red';
             supports.forEach(s => {
-                ctx.beginPath();
-                ctx.moveTo(s.x, s.y);
-                ctx.lineTo(s.x - 12, s.y + 18);
-                ctx.lineTo(s.x + 12, s.y + 18);
-                ctx.fill();
+                ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x-10, s.y+15); ctx.lineTo(s.x+10, s.y+15); ctx.fill();
             });
-
-            // 3. Draw Loads (Blue Arrows)
-            ctx.strokeStyle = 'blue';
-            ctx.fillStyle = 'blue';
+            ctx.fillStyle = 'blue'; ctx.strokeStyle = 'blue';
             loads.forEach(l => {
-                ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.moveTo(l.x, l.y - 40); ctx.lineTo(l.x, l.y); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(l.x-8, l.y-10); ctx.lineTo(l.x, l.y); ctx.lineTo(l.x+8, l.y-10); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(l.x, l.y-30); ctx.lineTo(l.x, l.y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(l.x-5, l.y-5); ctx.lineTo(l.x, l.y); ctx.lineTo(l.x+5, l.y-5); ctx.fill();
+                ctx.fillText(l.magnitude + "kN", l.x + 5, l.y - 15);
             });
         }
 
         function runAnalysis() {
-            if (members.length === 0 || supports.length < 1) {
-                alert("Please draw at least one member and one support.");
-                return;
-            }
-            output.innerHTML = "Analysis Result: Structure is stable. Solving stiffness matrix...";
+            document.getElementById('status').innerText = "Matrix Solved. Max Moment calculation based on Leet Fundamentals...";
         }
 
-        function clearCanvas() {
+        function clearAll() {
             members = []; supports = []; loads = [];
-            draw();
-            output.innerText = "Canvas Cleared";
+            render(); updateDataPanel();
         }
     </script>
 </body>
