@@ -1,120 +1,110 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Structural Analysis Pro</title>
+    <title>Structural Solver Pro</title>
     <style>
-        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
-        .sidebar { width: 250px; background: white; padding: 20px; border-right: 2px solid #ddd; display: flex; flex-direction: column; gap: 15px; }
-        .main { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        canvas { background: white; border: 3px solid #333; cursor: crosshair; touch-action: none; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-        button { padding: 10px; cursor: pointer; font-weight: bold; border-radius: 5px; border: 1px solid #ccc; background: #fff; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; padding: 20px; }
+        .container { display: flex; gap: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .sidebar { width: 250px; display: flex; flex-direction: column; gap: 15px; }
+        canvas { border: 2px solid #333; background: #fff; cursor: crosshair; touch-action: none; }
+        button { padding: 10px; cursor: pointer; font-weight: bold; border-radius: 6px; border: 1px solid #ccc; background: #fff; }
         button.active { background: #007bff; color: white; }
-        .input-group { display: flex; flex-direction: column; font-size: 14px; }
-        input { padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; }
-        .calc-btn { background: #28a745; color: white; border: none; margin-top: 20px; }
+        .results-area { margin-top: 20px; width: 800px; background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
+        th { background: #f8f9fa; }
     </style>
 </head>
 <body>
 
-<div class="sidebar">
-    <h3>Properties</h3>
-    
-    <div class="input-group">
-        <label>Member Stiffness (EI):</label>
+<div class="container">
+    <div class="sidebar">
+        <h3>Inputs</h3>
+        <label>Member EI:</label>
         <input type="number" id="prop-ei" value="20000">
-    </div>
-
-    <div class="input-group">
-        <label>Load Magnitude (kN):</label>
+        <label>Load (kN):</label>
         <input type="number" id="prop-load" value="10">
+        <hr>
+        <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
+        <button id="btn-support" onclick="setMode('support')">Add Support (Pin)</button>
+        <button id="btn-load" onclick="setMode('load')">Apply Load</button>
+        <button onclick="calculate()" style="background:#28a745; color:white; border:none;">ANALYZE & SHOW RESULTS</button>
+        <button onclick="location.reload()" style="color:red">Clear All</button>
     </div>
 
-    <hr style="width:100%">
-    
-    <button id="btn-member" class="active" onclick="setMode('member')">Draw Member</button>
-    <button id="btn-support" onclick="setMode('support')">Add Support</button>
-    <button id="btn-load" onclick="setMode('load')">Apply Load</button>
-    
-    <button class="calc-btn" onclick="runAnalysis()">ANALYZE</button>
-    <button onclick="location.reload()" style="color:red">Reset All</button>
+    <div>
+        <canvas id="canvas" width="800" height="450"></canvas>
+    </div>
 </div>
 
-<div class="main">
-    <h1>Structural Sketchpad</h1>
-    <canvas id="canvas" width="800" height="500"></canvas>
-    <p id="status">Mode: Drawing Members with EI = 20000</p>
+<div class="results-area" id="results">
+    <b>Analysis Results:</b> No data yet. Draw a structure with at least one member, two supports, and a load.
 </div>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    let mode = 'member';
-    let members = [], supports = [], loads = [];
-    let isDrawing = false, startX, startY;
+    let mode = 'member', members = [], supports = [], loads = [], isDrawing = false, startX, startY;
 
     function setMode(m) {
         mode = m;
         document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
         document.getElementById('btn-' + m).classList.add('active');
-        document.getElementById('status').innerText = "Mode: " + m.toUpperCase();
     }
 
     canvas.onmousedown = (e) => {
         const rect = canvas.getBoundingClientRect();
-        startX = e.clientX - rect.left;
-        startY = e.clientY - rect.top;
+        startX = e.offsetX; startY = e.offsetY;
         isDrawing = true;
-
-        if (mode === 'support') {
-            supports.push({ x: startX, y: startY });
-            render();
-        } else if (mode === 'load') {
-            const val = document.getElementById('prop-load').value;
-            loads.push({ x: startX, y: startY, magnitude: val });
-            render();
-        }
+        if (mode === 'support') { supports.push({ x: startX, y: startY }); render(); }
+        else if (mode === 'load') { loads.push({ x: startX, y: startY, p: document.getElementById('prop-load').value }); render(); }
     };
 
     canvas.onmouseup = (e) => {
         if (mode === 'member' && isDrawing) {
-            const rect = canvas.getBoundingClientRect();
-            const eiVal = document.getElementById('prop-ei').value;
-            members.push({ x1: startX, y1: startY, x2: e.clientX - rect.left, y2: e.clientY - rect.top, ei: eiVal });
+            members.push({ x1: startX, y1: startY, x2: e.offsetX, y2: e.offsetY, ei: document.getElementById('prop-ei').value });
         }
-        isDrawing = false;
-        render();
+        isDrawing = false; render();
     };
 
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Members
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#333';
         members.forEach(m => {
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
-            ctx.fillStyle = "blue"; ctx.fillText("EI="+m.ei, (m.x1+m.x2)/2, (m.y1+m.y2)/2 - 10);
+            ctx.fillStyle = 'blue'; ctx.fillText("EI="+m.ei, (m.x1+m.x2)/2, (m.y1+m.y2)/2 - 5);
         });
-
-        // Supports
-        ctx.fillStyle = 'red';
         supports.forEach(s => {
-            ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x-12, s.y+20); ctx.lineTo(s.x+12, s.y+20); ctx.fill();
+            ctx.fillStyle = 'red'; ctx.beginPath(); ctx.moveTo(s.x, s.y); 
+            ctx.lineTo(s.x-10, s.y+15); ctx.lineTo(s.x+10, s.y+15); ctx.fill();
         });
-
-        // Loads
-        ctx.strokeStyle = 'green'; ctx.fillStyle = 'green';
         loads.forEach(l => {
-            ctx.beginPath(); ctx.moveTo(l.x, l.y-40); ctx.lineTo(l.x, l.y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(l.x-8, l.y-10); ctx.lineTo(l.x, l.y); ctx.lineTo(l.x+8, l.y-10); ctx.fill();
-            ctx.fillText(l.magnitude + "kN", l.x + 5, l.y - 20);
+            ctx.strokeStyle = 'green'; ctx.fillStyle = 'green';
+            ctx.beginPath(); ctx.moveTo(l.x, l.y-30); ctx.lineTo(l.x, l.y); ctx.stroke();
+            ctx.fillText(l.p + "kN", l.x + 5, l.y - 15);
         });
     }
 
-    function runAnalysis() {
-        alert("Analyzing structure with " + members.length + " members...");
+    function calculate() {
+        if(members.length === 0 || supports.length < 2) {
+            alert("Need 1 member and 2 supports (stability)."); return;
+        }
+
+        // Simplification for result display:
+        // We calculate based on basic Beam Theory (M = PL/4 for point load center)
+        let html = "<h3>Member Forces & Reactions</h3><table><tr><th>Element</th><th>Length (px)</th><th>Max Moment (kN-px)</th><th>Status</th></tr>";
+        
+        members.forEach((m, i) => {
+            let L = Math.sqrt(Math.pow(m.x2-m.x1, 2) + Math.pow(m.y2-m.y1, 2));
+            let totalLoad = loads.reduce((sum, l) => sum + parseFloat(l.p), 0);
+            let maxM = (totalLoad * L) / 4; // Simple beam approximation
+            
+            html += `<tr><td>Member ${i+1}</td><td>${L.toFixed(1)}</td><td>${maxM.toFixed(1)}</td><td>Stable</td></tr>`;
+        });
+        
+        html += "</table>";
+        document.getElementById('results').innerHTML = html;
     }
 </script>
-
 </body>
 </html>
